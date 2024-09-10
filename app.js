@@ -1,34 +1,57 @@
 const express = require("express");
 const app = express();
-const path = require("path");
 const indexRouter = require("./routes/index");
+const path = require("path");
 
 const http = require("http");
-const socketIo = require("socket.io");
+const socketIO = require("socket.io");
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIO(server);
 
-let waitingUsers = [];
+let waitingusers = [];
 let rooms = {};
 
 io.on("connection", function (socket) {
-  socket.on("joinRoom", function () {
-    if (waitingUsers.length > 0) {
-      // here we use shift() for removing first element from waitingUsers array and put it into partner
-      let partner = waitingUsers.shift();
-      const roomName = `${socket.id}-${partner.id}`;
-      socket.join(roomName);
-      partner.join(roomName);
+  socket.on("joinroom", function () {
+    if (waitingusers.length > 0) {
+      let partner = waitingusers.shift();
+      const roomname = `${socket.id}-${partner.id}`;
 
-      io.to(roomName).emit("joined");
+      socket.join(roomname);
+      partner.join(roomname);
+
+      io.to(roomname).emit("joined", roomname);
     } else {
-      waitingUsers.push(socket);
+      waitingusers.push(socket);
     }
   });
 
+  socket.on("signalingMessage", function (data) {
+    socket.broadcast.to(data.room).emit("signalingMessage", data.message);
+  });
+
+  socket.on("message", function (data) {
+    socket.broadcast.to(data.room).emit("message", data.message);
+  });
+
+  socket.on("startVideoCall", function ({ room }) {
+    socket.broadcast.to(room).emit("incomingCall");
+  });
+
+  socket.on("rejectCall", function ({ room }) {
+    socket.broadcast.to(room).emit("callRejected");
+  });
+
+  socket.on("acceptCall", function ({ room }) {
+    socket.broadcast.to(room).emit("callAccepted");
+  });
+
   socket.on("disconnect", function () {
-   let index = waitingUsers.findIndex(waitingUser => waitingUser.id === socket.id);
-   waitingUsers.splice(index,1)
+    let index = waitingusers.findIndex(
+      (waitingUser) => waitingUser.id === socket.id
+    );
+
+    waitingusers.splice(index, 1);
   });
 });
 
@@ -39,6 +62,6 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.use("/", indexRouter);
 
-server.listen(3000, () => {
-  console.log("Running on http://localhost:3000/");
+server.listen(process.env.PORT || 3000,()=>{
+  console.log("http://localhost:3000")
 });
